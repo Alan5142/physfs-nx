@@ -249,25 +249,57 @@ static char *readSymLink(const char *path)
 char *__PHYSFS_platformCalcBaseDir(const char *argv0)
 {
     char *retval = NULL;
-    const char *envr = NULL;
 
     /* Try to avoid using argv0 unless forced to. Try system-specific stuff. */
 
-    #if defined(PHYSFS_PLATFORM_FREEBSD)
+#ifdef PHYSFS_PLATFORM_SWITCH
+    /* As there is no system-specific directory, directly inspect argv0. */
+    if (argv0 == NULL)
+    {
+        /* User did not provide a path, just use the current working directory.
+         *  As physfs should be initialized soon after application start, this
+         *  should give us a useable directory.
+         */
+        char fullpath[PATH_MAX];
+        if (getcwd(fullpath, sizeof(fullpath)) != NULL)
+        {
+             const size_t cwdlen = strlen(fullpath);
+             /* getcwd does not provide a trailing slash, add it. */
+             retval = (char*) allocator.Malloc(cwdlen + 2);
+             BAIL_IF(!retval, PHYSFS_ERR_OUT_OF_MEMORY, NULL);
+             strncpy(retval, fullpath, cwdlen);
+             retval[cwdlen] = '/';
+             retval[cwdlen + 1] = '\0';
+        }
+    }
+    else
+        /* nx-hbmenu should give us the full path of the application, this may
+         *  reside in a subfolder. Higher level code will strip away the name
+         *  and extension.
+         */
+        return NULL;
+
+    if (!retval)
+        /* Last resort: use `/switch` directory. */
+        retval = __PHYSFS_strdup("sdmc:/switch/");
+#else
+    const char *envr = NULL;
+
+#if defined(PHYSFS_PLATFORM_FREEBSD)
     {
         char fullpath[PATH_MAX];
         size_t buflen = sizeof (fullpath);
         int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1 };
         if (sysctl(mib, 4, fullpath, &buflen, NULL, 0) != -1)
-            retval = __PHYSFS_strdup(fullpath);
+             retval = __PHYSFS_strdup(fullpath);
     }
-    #elif defined(PHYSFS_PLATFORM_SOLARIS)
+#elif defined(PHYSFS_PLATFORM_SOLARIS)
     {
         const char *path = getexecname();
         if ((path != NULL) && (path[0] == '/'))  /* must be absolute path... */
-            retval = __PHYSFS_strdup(path);
+             retval = __PHYSFS_strdup(path);
     }
-    #endif
+#endif
 
     /* If there's a Linux-like /proc filesystem, you can get the full path to
      *  the current process from a symlink in there.
@@ -280,11 +312,11 @@ char *__PHYSFS_platformCalcBaseDir(const char *argv0)
         if (!retval) retval = readSymLink("/proc/curproc/exe");
         if (retval == NULL)
         {
-            /* older kernels don't have /proc/self ... try PID version... */
-            const unsigned long long pid = (unsigned long long) getpid();
-            char path[64];
-            const int rc = (int) snprintf(path,sizeof(path),"/proc/%llu/exe",pid);
-            if ( (rc > 0) && (rc < sizeof(path)) )
+             /* older kernels don't have /proc/self ... try PID version... */
+             const unsigned long long pid = (unsigned long long) getpid();
+             char path[64];
+             const int rc = (int) snprintf(path,sizeof(path),"/proc/%llu/exe",pid);
+             if ( (rc > 0) && (rc < sizeof(path)) )
                 retval = readSymLink(path);
         } /* if */
     } /* if */
@@ -293,11 +325,11 @@ char *__PHYSFS_platformCalcBaseDir(const char *argv0)
     {
         char *ptr = strrchr(retval, '/');
         if (ptr != NULL)
-            *(ptr+1) = '\0';
+             *(ptr+1) = '\0';
         else  /* shouldn't happen, but just in case... */
         {
-            allocator.Free(retval);
-            retval = NULL;
+             allocator.Free(retval);
+             retval = NULL;
         } /* else */
     } /* if */
 
@@ -306,17 +338,17 @@ char *__PHYSFS_platformCalcBaseDir(const char *argv0)
     {
         /* fast path: default behaviour can handle this. */
         if (strchr(argv0, '/') != NULL)
-            return NULL;  /* higher level parses out real path from argv0. */
+             return NULL;  /* higher level parses out real path from argv0. */
 
         /* If there's no dirsep on argv0, then look through $PATH for it. */
         envr = getenv("PATH");
         if (envr != NULL)
         {
-            char *path = (char *) __PHYSFS_smallAlloc(strlen(envr) + 1);
-            BAIL_IF(!path, PHYSFS_ERR_OUT_OF_MEMORY, NULL);
-            strcpy(path, envr);
-            retval = findBinaryInPath(argv0, path);
-            __PHYSFS_smallFree(path);
+             char *path = (char *) __PHYSFS_smallAlloc(strlen(envr) + 1);
+             BAIL_IF(!path, PHYSFS_ERR_OUT_OF_MEMORY, NULL);
+             strcpy(path, envr);
+             retval = findBinaryInPath(argv0, path);
+             __PHYSFS_smallFree(path);
         } /* if */
     } /* if */
 
@@ -325,8 +357,9 @@ char *__PHYSFS_platformCalcBaseDir(const char *argv0)
         /* try to shrink buffer... */
         char *ptr = (char *) allocator.Realloc(retval, strlen(retval) + 1);
         if (ptr != NULL)
-            retval = ptr;  /* oh well if it failed. */
+             retval = ptr;  /* oh well if it failed. */
     } /* if */
+#endif
 
     return retval;
 } /* __PHYSFS_platformCalcBaseDir */

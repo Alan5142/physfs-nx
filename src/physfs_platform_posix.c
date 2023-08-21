@@ -58,6 +58,7 @@ static inline PHYSFS_ErrorCode errcodeFromErrno(void)
 
 static char *getUserDirByUID(void)
 {
+#ifndef PHYSFS_PLATFORM_SWITCH
     uid_t uid = getuid();
     struct passwd *pw;
     char *retval = NULL;
@@ -78,8 +79,14 @@ static char *getUserDirByUID(void)
             } /* if */
         } /* if */
     } /* if */
-    
+
     return retval;
+
+#else
+    char *retval = allocator.Malloc(8);
+    strcpy(retval, "romfs:/");
+    return retval;
+#endif
 } /* getUserDirByUID */
 
 
